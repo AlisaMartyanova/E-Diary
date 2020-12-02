@@ -53,12 +53,24 @@ def add_user(username, dob):
     user = {"username": username, "DoB": dob, "posts":[]}
     col.insert_one(user)
 
-# @app.route('/add_post', methods=["POST"])
-# def add_user_post():
-#     new_post = request.values['post']
-#     user_id = request.values['user_id']
-#     for document in mydb['users'].find({"_id":user_id}):
-#         document
+@app.route('/add_post', methods=["POST"])
+def add_user_post():
+    file = request.files['file']
+    post = json.load(file)
+    user_id = request.headers['id']
+    mydb['users'].update_one({'_id': user_id}, {'$push': { 'posts': post} })
+    return 'Post was successfully uploaded'
+
+@app.route('/view_all_posts', methods=['GET'])
+def view_all_posts():
+    user_id = request.headers['id']
+    document = mydb['users'].find({'_id': user_id})
+    posts = []
+    for i in document['posts']:
+        posts.append(i)
+
+    return jsonify(posts)
+
 
 def parse_json(data):
     return json.loads(json_util.dumps(data))
