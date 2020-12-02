@@ -1,4 +1,4 @@
-from flask import Flask, render_template, url_for
+from flask import Flask, render_template, url_for, abort
 from flask import request, jsonify
 from pymongo import MongoClient
 import bson.json_util as json_util
@@ -87,19 +87,16 @@ def add_user(username, password, _id):
 
 @app.route('/add_post', methods=["POST"])
 def add_user_post():
-    file = request.files['file']
-    post = parse_json(file)
+    post = request.json
     user_id = request.headers['id']
-    mydb['users'].find_one_and_update({'id': int(user_id)}, {'$set': { 'posts': post} })
-    return 'Post was successfully uploaded'
+    mydb['users'].find_one_and_update({'id': int(user_id)}, {'$push': { 'posts': post} })
+    return jsonify(user_id)      #'Post was successfully uploaded'
 
 @app.route('/view_all_posts', methods=['GET'])
 def view_all_posts():
     user_id = request.headers['id']
-    document = mydb['users'].find({'id': int(user_id)})
-    posts = []
-    for i in document['posts']:
-        posts.append(i)
+    document = mydb['users'].find_one({'id': int(user_id)})
+    posts = parse_json(document)['posts']
 
     return jsonify(posts)
 
@@ -109,19 +106,14 @@ def parse_json(data):
 
 @app.route('/users', methods=['GET'])
 def get_users_list():
+    # add_user('Alisa', "12345", 2)
     users = []
     for document in mydb["users"].find({}):
         info = parse_json(document)
         info['_id'] = info['_id']['$oid']
         users.append(info)
-        # document['_id'] = document['_id'].toString()
-        # users.append(document)
 
     return jsonify(users)
-
-# @app.route('/posts', methods=['GET'])
-# def get_users_posts():
-    
 
 @app.route('/protected')
 @jwt_required()
