@@ -3,17 +3,54 @@ from flask import request, jsonify
 from pymongo import MongoClient
 import bson.json_util as json_util
 import json, datetime
+from flask_jwt import JWT, jwt_required, current_identity
+from werkzeug.security import safe_str_cmp
+import hashlib
 
 from pymongo.common import clean_node
 
-app = Flask(__name__)
 
-id = 0
+class DotDictWrapper:
+    def __init__(self, d):
+        self.d = d
+
+    def __getattr__(self,key):
+        try:
+            return self.d[key]
+        except KeyError.err:
+            raise AttributeError(key)
+
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'super-secret'
+
+
+_id = 1
 #connecting to mongodb
 client = MongoClient('localhost', 27017)
 db_name = "database"
-
+# client.drop_database(db_name)
 mydb = client[db_name]
+
+
+def authenticate(username, password):
+    user = mydb["users"].find_one({'username':username, 'password': hashlib.md5(password.encode()).hexdigest()})
+    if user:
+        info = parse_json(user)
+        return DotDictWrapper(info)
+    return None
+
+
+def identity(payload):
+    user_id = payload['identity']
+    u = mydb["users"].find({'id': user_id})
+    if u:
+        info = parse_json(u)
+        return info
+    return None
+
+jwt = JWT(app, authenticate, identity)
+
 # users = mydb["users"]
 
 post = [
@@ -40,17 +77,12 @@ def hello_world():
 def about():
     return render_template('about.html', title='Good')
 
-def init_db():
-   #  db = client[db_name]
-    client.drop_database(db_name)
-    mydb = client[db_name]
-    return "24\n"
 
-def add_user(username, dob, id):
+def add_user(username, password, _id):
     # user = {"id": id, "username": username, "DoB": dob}
     # db = client[db_name]
     col = mydb["users"]
-    user = {'id': id, "username": username, "DoB": dob, "posts":[]}
+    user = {"id": _id, "username": username, 'password': password, "posts":[]}
     col.insert_one(user)
 
 @app.route('/add_post', methods=["POST"])
@@ -77,14 +109,11 @@ def parse_json(data):
 
 @app.route('/users', methods=['GET'])
 def get_users_list():
-    init_db()
-
-    add_user("Alisa", "12", 1)
-    add_user("Alena", "13", 2)
     users = []
     for document in mydb["users"].find({}):
-        obj_id = print(parse_json(document))
-        users.append(parse_json(document))
+        info = parse_json(document)
+        info['_id'] = info['_id']['$oid']
+        users.append(info)
         # document['_id'] = document['_id'].toString()
         # users.append(document)
 
@@ -93,6 +122,23 @@ def get_users_list():
 # @app.route('/posts', methods=['GET'])
 # def get_users_posts():
     
+
+@app.route('/protected')
+@jwt_required()
+def protected():
+    return '%s' % current_identity
+
+@app.route('/register', methods=["POST"])
+def register():
+    global _id
+    username = request.json['username']
+    password = request.json['password']
+    h = hashlib.md5(password.encode()).hexdigest()
+
+    add_user(username, h, _id)
+    _id += 1
+
+    return 'OK'
 
 if __name__ == '__main__':
     app.run(debug=True)
