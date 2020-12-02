@@ -46,25 +46,25 @@ def init_db():
     mydb = client[db_name]
     return "24\n"
 
-def add_user(username, dob):
+def add_user(username, dob, id):
     # user = {"id": id, "username": username, "DoB": dob}
     # db = client[db_name]
     col = mydb["users"]
-    user = {"username": username, "DoB": dob, "posts":[]}
+    user = {'id': id, "username": username, "DoB": dob, "posts":[]}
     col.insert_one(user)
 
 @app.route('/add_post', methods=["POST"])
 def add_user_post():
     file = request.files['file']
-    post = json.load(file)
+    post = parse_json(file)
     user_id = request.headers['id']
-    mydb['users'].update_one({'_id': user_id}, {'$push': { 'posts': post} })
+    mydb['users'].find_one_and_update({'id': int(user_id)}, {'$set': { 'posts': post} })
     return 'Post was successfully uploaded'
 
 @app.route('/view_all_posts', methods=['GET'])
 def view_all_posts():
     user_id = request.headers['id']
-    document = mydb['users'].find({'_id': user_id})
+    document = mydb['users'].find({'id': int(user_id)})
     posts = []
     for i in document['posts']:
         posts.append(i)
@@ -79,14 +79,14 @@ def parse_json(data):
 def get_users_list():
     init_db()
 
-    add_user("Alisa", "12")
-    add_user("Alena", "13")
+    add_user("Alisa", "12", 1)
+    add_user("Alena", "13", 2)
     users = []
     for document in mydb["users"].find({}):
-        # obj_id = print(parse_json(document))
-        # users.append(parse_json(document))
-        document['_id'] = document['_id'].toString()
-        users.append(document)
+        obj_id = print(parse_json(document))
+        users.append(parse_json(document))
+        # document['_id'] = document['_id'].toString()
+        # users.append(document)
 
     return jsonify(users)
 
